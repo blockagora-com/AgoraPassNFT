@@ -8,7 +8,7 @@ import "erc721a/contracts/ERC721A.sol";
 contract AgoraPass is ERC721A, Ownable {
     uint256 public maxSupply;
     uint256 public price ;
-    string private _baseTokenURI;
+    string public _baseTokenURI;
 
 
     constructor(
