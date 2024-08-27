@@ -9,6 +9,7 @@ contract AgoraPass is ERC721A, Ownable {
     uint256 public maxSupply;
     uint256 public price ;
     string public _baseTokenURI;
+    uint256 public roundTokenNum; // Maximum number of tokens that can be minted in a single transaction
 
 
     constructor(
@@ -19,6 +20,7 @@ contract AgoraPass is ERC721A, Ownable {
     ) ERC721A(name, symbol) Ownable(msg.sender) {
         maxSupply = _maxSupply;
         price = initialPrice;
+        roundTokenNum = 0;
     }
 
 
@@ -31,13 +33,18 @@ contract AgoraPass is ERC721A, Ownable {
         price = newPrice;
     }
 
-    function mint(address send_to, uint256 quantity) external payable checkSupply(quantity){
-        require(msg.value >= price * quantity, "Incorrect payment amount"); // 检查支付金额
+    function setRoundTokenNum(uint256 newRoundTokenNum) external onlyOwner {
+        roundTokenNum = newRoundTokenNum;
+    }
+
+    function mint(address send_to, uint256 quantity) external payable checkSupply(quantity) {
+        require(totalSupply() < roundTokenNum, "Quantity exceeds round token limit");
+        require(msg.value >= price * quantity, "Incorrect payment amount");
         _mint(send_to, quantity);
 
         uint256 cost = price * quantity;
         if (msg.value > cost) {
-            payable(msg.sender).transfer(msg.value - cost); // 退还多余的 ETH
+            payable(msg.sender).transfer(msg.value - cost); // Refund excess ETH
         }
     }
 
