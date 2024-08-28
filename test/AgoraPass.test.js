@@ -17,7 +17,7 @@ describe("AgoraPass Contract", function () {
     name = "AgoraPass";
     symbol = "AGORAP";
     maxSupply = 10000;
-    priceBigNumber = ethers.parseEther("0.5"); // Set mint price to 0.5 ETH
+    priceBigNumber = ethers.parseEther("0.001"); // Set mint price to 0.001 ETH
 
     const signers = await ethers.getSigners();
     owner = signers[0];
@@ -43,8 +43,31 @@ describe("AgoraPass Contract", function () {
   });
 
   describe("Minting", function () {
+    it("Should mint tokens when totalSupply is less than roundTokenNum", async function () {
+      await agorapass.setRoundTokenNum(10)
+
+      await agorapass.mint(add1.address, 5, { value: ethers.parseEther("5") });
+      expect(await agorapass.totalSupply()).to.equal(5);
+      await agorapass.mint(add1.address, 3, { value: ethers.parseEther("3") });
+      expect(await agorapass.totalSupply()).to.equal(8);
+    });
+
+    it("Should revert if minting would exceed roundTokenNum", async function () {
+      await agorapass.setRoundTokenNum(10)
+
+      await agorapass.mint(add1.address, 10, { value: ethers.parseEther("10") });
+      expect(await agorapass.totalSupply()).to.equal(10);
+  
+      await expect(agorapass.mint(add1.address, 1, { value: ethers.parseEther("1") }))
+          .to.be.revertedWith("Quantity exceeds round token limit");
+    });
+
     it("Should mint tokens successfully", async function () {
       const ownerBalanceBefore = await ethers.provider.getBalance(owner.address);
+      await expect(agorapass.mint(owner.address, 1, { value: priceBigNumber })).to.be.revertedWith("Quantity exceeds round token limit");
+
+      await agorapass.setRoundTokenNum(10000)
+
       await expect(agorapass.mint(owner.address, 1, { value: priceBigNumber })).to.not.be.reverted;
       expect(await agorapass.totalSupply()).to.equal(1);
 
@@ -53,6 +76,8 @@ describe("AgoraPass Contract", function () {
     });
 
     it("Should revert if the max supply is exceeded", async function () {
+      await agorapass.setRoundTokenNum(10000)
+
       await agorapass.mint(owner.address, maxSupply - 1, { value: priceBigNumber * ethers.toBigInt(maxSupply - 1) });
       expect(await agorapass.totalSupply()).to.equal(maxSupply - 1);
 
@@ -62,6 +87,8 @@ describe("AgoraPass Contract", function () {
     });
 
     it("Should refund excess ETH sent during minting", async function () {
+      await agorapass.setRoundTokenNum(10000)
+
       const excessPayment = ethers.parseEther("1");
       const balanceBefore = await ethers.provider.getBalance(add1.address);
 
@@ -71,6 +98,49 @@ describe("AgoraPass Contract", function () {
       expect(balanceAfter).to.be.closeTo(balanceBefore - priceBigNumber, ethers.parseEther("0.01")); // Allow some deviation for gas costs
     });
   });
+
+
+  describe("Tokenuri Tests", async function () {
+
+    it("Should return the correct tokenURI when baseURI is set", async function () {
+        await agorapass.setRoundTokenNum(10000)
+
+        await agorapass.setBaseURI("https://example.com/metadata/");
+        await agorapass.mint(owner.address, 5, { value: priceBigNumber * ethers.toBigInt(5) })
+
+        const tokenURI = await agorapass.tokenURI(0);
+        expect(tokenURI).to.equal("https://example.com/metadata/0");
+
+        const tokenURI3 = await agorapass.tokenURI(3);
+        expect(tokenURI3).to.equal("https://example.com/metadata/3");
+    });
+
+    it("Should revert when querying tokenURI for a non-existent token", async function () {
+        await agorapass.setRoundTokenNum(10000)
+        await expect(agorapass.tokenURI(9999)).to.be.revertedWithCustomError(agorapass, "URIQueryForNonexistentToken");
+    });
+  })
+
+  describe("CheckSupply Tests", async function () {
+    it("Should allow minting within maxSupply", async function () {
+        await agorapass.setRoundTokenNum(10000)
+
+        await agorapass.mint(add1.address, 5000, { value: ethers.parseEther("50") });
+
+        await agorapass.mint(add1.address, 5000, { value: ethers.parseEther("50") });
+        expect(await agorapass.totalSupply()).to.equal(10000);
+    });
+
+    it("Should revert minting that exceeds maxSupply", async function () {
+        await agorapass.setRoundTokenNum(10000)
+
+        await agorapass.mint(add1.address, 10000, { value: ethers.parseEther("50") });
+        expect(await agorapass.totalSupply()).to.equal(10000);
+
+        await expect(agorapass.mint(add1.address, 6, { value: ethers.parseEther("50") }))
+            .to.be.revertedWith("Maximum supply reached");
+    });
+  })
 
   describe("Admin Minting", function () {
     it("Should allow the owner to mint tokens without payment", async function () {
@@ -118,6 +188,8 @@ describe("AgoraPass Contract", function () {
 
   describe("Withdraw", function () {
     it("Should allow the owner to withdraw funds", async function () {
+      agorapass.setRoundTokenNum(10000)
+
       const balanceBefore = await ethers.provider.getBalance(owner.address);
 
       // Mint to generate funds
