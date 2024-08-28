@@ -16,8 +16,9 @@ contract AgoraPass is ERC721A, Ownable {
         string memory name, 
         string memory symbol, 
         uint256 _maxSupply, 
-        uint256 initialPrice
-    ) ERC721A(name, symbol) Ownable(msg.sender) {
+        uint256 initialPrice,
+        address newowner
+    ) ERC721A(name, symbol) Ownable(newowner) {
         maxSupply = _maxSupply;
         price = initialPrice;
         roundTokenNum = 0;

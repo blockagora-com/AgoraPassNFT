@@ -24,7 +24,11 @@ describe("AgoraPass Contract", function () {
     add1 = signers[1];
 
     AgoraPass = await ethers.getContractFactory("AgoraPass"); 
-    agorapass = await AgoraPass.deploy(name, symbol, maxSupply, priceBigNumber);
+    agorapass = await AgoraPass.deploy(name, symbol, maxSupply, priceBigNumber, add1.address);
+    expect(await agorapass.owner()).to.equal(add1.address);
+    await agorapass.connect(add1).transferOwnership(owner.address)
+    expect(await agorapass.owner()).to.equal(owner.address);
+
   });
 
   describe("Deployment", function () {
@@ -42,16 +46,7 @@ describe("AgoraPass Contract", function () {
     });
   });
 
-  describe("Minting", function () {
-    it("Should mint tokens when totalSupply is less than roundTokenNum", async function () {
-      await agorapass.setRoundTokenNum(10)
-
-      await agorapass.mint(add1.address, 5, { value: ethers.parseEther("5") });
-      expect(await agorapass.totalSupply()).to.equal(5);
-      await agorapass.mint(add1.address, 3, { value: ethers.parseEther("3") });
-      expect(await agorapass.totalSupply()).to.equal(8);
-    });
-
+  describe("RoundTokenNum", function () {
     it("Should revert if minting would exceed roundTokenNum", async function () {
       await agorapass.setRoundTokenNum(10)
 
@@ -60,6 +55,22 @@ describe("AgoraPass Contract", function () {
   
       await expect(agorapass.mint(add1.address, 1, { value: ethers.parseEther("1") }))
           .to.be.revertedWith("Quantity exceeds round token limit");
+    });
+
+    it("Should revert if a non-owner tries to set roundTokenNum", async function () {
+      await expect(agorapass.connect(add1).setRoundTokenNum(10))
+      .to.be.revertedWithCustomError(agorapass, "OwnableUnauthorizedAccount");
+    });
+  })
+
+  describe("Minting", function () {
+    it("Should mint tokens when totalSupply is less than roundTokenNum", async function () {
+      await agorapass.setRoundTokenNum(10)
+
+      await agorapass.mint(add1.address, 5, { value: ethers.parseEther("5") });
+      expect(await agorapass.totalSupply()).to.equal(5);
+      await agorapass.mint(add1.address, 3, { value: ethers.parseEther("3") });
+      expect(await agorapass.totalSupply()).to.equal(8);
     });
 
     it("Should mint tokens successfully", async function () {
@@ -148,6 +159,11 @@ describe("AgoraPass Contract", function () {
       expect(await agorapass.totalSupply()).to.equal(1);
     });
 
+    it("Should revert if a non-owner tries to mint as the admin", async function () {
+      await expect(agorapass.connect(add1).adminMint(owner.address, 1))
+      .to.be.revertedWithCustomError(agorapass, "OwnableUnauthorizedAccount");
+    });
+
     it("Should revert if the admin mint exceeds max supply", async function () {
       await agorapass.adminMint(owner.address, maxSupply - 1);
       expect(await agorapass.totalSupply()).to.equal(maxSupply - 1);
@@ -177,6 +193,12 @@ describe("AgoraPass Contract", function () {
       const newBaseURI = "https://newbaseuri.com/";
       await agorapass.setBaseURI(newBaseURI);
       expect(await agorapass._baseTokenURI()).to.equal(newBaseURI);
+    });
+
+    it("Should revert if a non-owner tries to set base URI", async function () {
+      const newBaseURI = "https://newbaseuri.com/";
+      await expect(agorapass.connect(add1).setBaseURI(newBaseURI))
+      .to.be.revertedWithCustomError(agorapass, "OwnableUnauthorizedAccount");
     });
 
     it("Should return the correct base URI after setting", async function () {
